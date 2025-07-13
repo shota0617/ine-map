@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { db, storage, auth } from "../lib/firebase";
 import { addDoc, collection, Timestamp, query, orderBy } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -12,38 +12,45 @@ import { GoogleMap, Marker, useLoadScript } from "@react-google-maps/api";
 // Google Maps APIキー
 const GOOGLE_MAPS_API_KEY = "AIzaSyD_f3fUCg9IrFSEVpo70p0EPCZv-l_pOHk";
 
+type Fields = {
+  location: string;
+  comment: string;
+  lat: string;
+  lng: string;
+};
+
 export default function Home() {
   const [user] = useAuthState(auth);
 
-  // 地図・フォーム用ステート
-  const [image, setImage] = useState(null);
-  const [fields, setFields] = useState({
+  const [image, setImage] = useState<File | null>(null);
+  const [fields, setFields] = useState<Fields>({
     location: "",
     comment: "",
     lat: "",
     lng: ""
   });
-  const [mapCenter, setMapCenter] = useState({ lat: 35.170915, lng: 136.881537 }); // 初期中心
+  const [mapCenter, setMapCenter] = useState<{lat: number, lng: number}>({ lat: 35.170915, lng: 136.881537 });
 
-  // Google Mapsロード（ここだけ！）
   const { isLoaded } = useLoadScript({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
   });
   if (!isLoaded) return <div>地図を読み込み中...</div>;
 
   // 地図クリックでピン＆緯度経度セット
-  const handleMapClick = (e) => {
-    const lat = e.latLng.lat();
-    const lng = e.latLng.lng();
-    setFields((f) => ({
-      ...f,
-      lat: lat.toString(),
-      lng: lng.toString(),
-    }));
-    setMapCenter({ lat, lng });
+  const handleMapClick = (e: google.maps.MapMouseEvent) => {
+    if (e.latLng) {
+      const lat = e.latLng.lat();
+      const lng = e.latLng.lng();
+      setFields((f) => ({
+        ...f,
+        lat: lat.toString(),
+        lng: lng.toString(),
+      }));
+      setMapCenter({ lat, lng });
+    }
   };
 
-  // 「現在地にピンを立てる」ボタン用
+  // 現在地ピン
   const setCurrentLocation = () => {
     if (!navigator.geolocation) {
       alert("位置情報取得がサポートされていません");
@@ -66,12 +73,14 @@ export default function Home() {
     );
   };
 
-  const handleChange = (e) => {
+  // 型注釈を追加！
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFields({ ...fields, [e.target.name]: e.target.value });
   };
-  const handleFile = (e) => setImage(e.target.files[0]);
-
-  const handleSubmit = async (e) => {
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImage(e.target.files && e.target.files[0] ? e.target.files[0] : null);
+  };
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!image) return alert("画像を選んでください");
     if (!fields.lat || !fields.lng) return alert("地図をクリックまたは現在地ボタンで場所を選んでください");
@@ -84,7 +93,7 @@ export default function Home() {
       lng: fields.lng,
       imageUrl: url,
       createdAt: Timestamp.now(),
-      user: user.displayName,
+      user: user?.displayName ?? "",
     });
     alert("投稿しました！");
     setFields({ location: "", comment: "", lat: "", lng: "" });
@@ -203,7 +212,7 @@ function ListPosts() {
   return (
     <div>
       {snapshots.docs.map((doc) => {
-        const d = doc.data();
+        const d = doc.data() as any;
         return (
           <div key={doc.id} style={styles.card}>
             <img src={d.imageUrl} alt="" style={styles.cardImg} />
@@ -236,7 +245,7 @@ function MapPosts() {
         zoom={7}
       >
         {snapshots.docs.map((doc) => {
-          const d = doc.data();
+          const d = doc.data() as any;
           if (!d.lat || !d.lng) return null;
           return (
             <Marker
@@ -251,8 +260,8 @@ function MapPosts() {
   );
 }
 
-// インラインCSS（レスポンシブ含む）
-const styles = {
+// インラインCSS
+const styles: { [key: string]: React.CSSProperties } = {
   container: {
     maxWidth: 480,
     margin: "0 auto",
